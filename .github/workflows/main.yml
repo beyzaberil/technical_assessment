@@ -26,39 +26,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Bu adım, hem ROS ortamını kurar, hem simülasyonu başlatır, hem de testi çalıştırır.
+      # YENİ VE BASİT ADIM: Sadece oluşturduğumuz script'i çalıştırır.
       - name: Run Simulation and Tests
         id: task1
         continue-on-error: true
-        run: |
-          docker run --rm -t uav-assessment-env bash -c "
-            set -e # Herhangi bir komut hata verirse scripti durdurur (daha iyi hata takibi için)
-
-            # ÖNCE GEREKLİ ROS ORTAMINI HAZIRLA
-            source /opt/ros/humble/setup.bash
-
-            # Şimdi simülasyon bileşenlerini arka planda başlat
-            echo 'Starting simulation components...'
-            gzserver -s libgazebo_ros_init.so -s libgazebo_ros_factory.so &
-            (cd /root/PX4-Autopilot && export PX4_SIM_MODEL=standard_plane && build/px4_sitl_default/bin/px4 ROMFS/px4fmu_common -s etc/init.d-posix/rcS) &
-            micrortps_agent -t UDP &
-            
-            # Her şeyin başlaması için 60 saniye bekle
-            echo 'Waiting 60 seconds for simulation to initialize...'
-            sleep 60
-
-            # Şimdi kendi workspace'imizi tanıt ve testi çalıştır
-            echo 'Sourcing workspace and running the test...'
-            source /root/ros2_ws/install/setup.bash
-            colcon test --packages-select test_package --ctest-args '-R test_task_1_arm_disarm'
-          "
+        run: docker run --rm -t uav-assessment-env /root/run_test.sh
 
       - name: Generate Assessment Report
         if: always()
         run: |
           echo "## 📝 Aday Değerlendirme Raporu" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
-          
           if [[ "${{ steps.task1.outcome }}" == "success" ]]; then
             echo "### ✅ Görev 1: Arm ve Disarm Başarılı" >> $GITHUB_STEP_SUMMARY
           else

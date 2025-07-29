@@ -50,5 +50,9 @@ RUN source /opt/ros/humble/setup.bash && \
 # Çalışma alanını derle (artık px4_ros_com da derlenecek)
 RUN source /opt/ros/humble/setup.bash && colcon build
 
+# Test script'ini container'ın içine kopyala ve çalıştırılabilir yap
+COPY .github/run_test.sh /root/run_test.sh
+RUN chmod +x /root/run_test.sh
+
 # Container başladığında bash'i çalıştır ve ROS ortamını hazırla
 CMD ["/bin/bash"]
