@@ -24,7 +24,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 3. Adım: Docker imajını oluşturur (daha önce saatlerce uğraştığımız Dockerfile'ı kullanarak)
+      # 3. Adım: Docker imajını oluşturur
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
@@ -35,9 +35,8 @@ jobs:
           cache-to: type=gha,mode=max
 
       # 4. Adım: Simülasyonu başlatır ve testleri çalıştırır
-      # Bu adım, bizim 3 terminalde yaptığımız her şeyi tek seferde yapar.
       - name: Run Simulation and Tests
-        id: task1 # Raporlama için bu adıma bir kimlik veriyoruz
+        id: task1
         continue-on-error: true
         run: |
           docker run --rm -t uav-assessment-env bash -c "
@@ -70,4 +69,3 @@ jobs:
             echo "### ❌ Görev 1: Arm ve Disarm Başarısız" >> $GITHUB_STEP_SUMMARY
             echo "**Detaylar:** 'Run Simulation and Tests' adımının loglarını inceleyin." >> $GITHUB_STEP_SUMMARY
           fi
-
