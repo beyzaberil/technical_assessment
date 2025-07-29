@@ -2,7 +2,6 @@
 FROM osrf/ros:humble-desktop
 
 # Gerekli kurulumları yap, apt'yi temizle
-# YENİ: px4_ros_com paketini ekliyoruz.
 SHELL ["/bin/bash", "-c"]
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     git \
@@ -16,7 +15,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     libprotobuf-dev \
     protobuf-compiler \
     gazebo \
-    ros-humble-px4-ros-com \
     && rm -rf /var/lib/apt/lists/*
 
 # PX4-Autopilot'u v1.12.3 olarak kur
@@ -33,17 +31,23 @@ RUN sed -i 's/math::max(PTHREAD_STACK_MIN, PX4_STACK_ADJUSTED(wq->stacksize))/ma
 # Derlemeyi başlat
 RUN make px4_sitl
 
-# ROS 2 çalışma alanını kopyala ve kur
+# ROS 2 çalışma alanını kopyala
 WORKDIR /root/ros2_ws
 COPY assessment_ws/ /root/ros2_ws/src/
 
+# PX4-ROS köprü paketlerini kaynak kodundan indir.
+WORKDIR /root/ros2_ws/src
+RUN git clone https://github.com/PX4/px4_ros_com.git
+RUN git clone https://github.com/PX4/px4_msgs.git
+
 # ROS 2 ortamını source et ve bağımlılıkları kur
+WORKDIR /root/ros2_ws
 RUN source /opt/ros/humble/setup.bash && \
     apt-get update && \
     rosdep update && \
     rosdep install --from-paths src -y --ignore-src
 
-# Çalışma alanını derle
+# Çalışma alanını derle (artık px4_ros_com da derlenecek)
 RUN source /opt/ros/humble/setup.bash && colcon build
 
 # Container başladığında bash'i çalıştır ve ROS ortamını hazırla
