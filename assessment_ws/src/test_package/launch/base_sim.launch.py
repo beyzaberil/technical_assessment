@@ -12,7 +12,7 @@ def generate_launch_description():
     
     # Ortam değişkenlerini PX4 SITL için ayarla
     # Hız faktörü testlerin daha hızlı bitmesini sağlar.
-    os.environ['PX4_SIM_MODEL'] = 'iris'
+    os.environ['PX4_SIM_MODEL'] = 'standart_plane'
     os.environ['PX4_SIM_SPEED_FACTOR'] = '10'
 
     return LaunchDescription([
