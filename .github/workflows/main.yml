@@ -3,43 +3,72 @@ name: UAV Assessment CI
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    name: Run Simulation Tests
+  run_simulation_test:
+    runs-on: ubuntu-20.04
 
     steps:
-      - name: Checkout repository
+      # Adım 1: Proje kodunu ve submodule'leri indir
+      - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
         with:
-          context: .
-          load: true
-          tags: uav-assessment-env:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          submodules: 'recursive'
 
-      # YENİ VE BASİT ADIM: Sadece oluşturduğumuz script'i çalıştırır.
-      - name: Run Simulation and Tests
-        id: task1
-        continue-on-error: true
-        run: docker run --rm -t uav-assessment-env /root/run_test.sh
-
-      - name: Generate Assessment Report
-        if: always()
+      # Adım 2: Tüm kurulumu, derlemeyi ve testi tek bir adımda yap
+      # Bu, herhangi bir hata durumunda iş akışının anında durmasını garantiler.
+      - name: Install Dependencies, Build, and Run Test
         run: |
-          echo "## 📝 Aday Değerlendirme Raporu" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ steps.task1.outcome }}" == "success" ]]; then
-            echo "### ✅ Görev 1: Arm ve Disarm Başarılı" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### ❌ Görev 1: Arm ve Disarm Başarısız" >> $GITHUB_STEP_SUMMARY
-            echo "**Detaylar:** 'Run Simulation and Tests' adımının loglarını inceleyin." >> $GITHUB_STEP_SUMMARY
-          fi
+          # Hata durumunda hemen çık
+          set -e
+
+          # --- BAĞIMLILIKLARI KUR ---
+          echo "Installing system dependencies..."
+          sudo apt-get update
+          # Gazebo ve MAVROS için eksik olan kritik paketler
+          sudo apt-get install -y libgazebo-dev ros-humble-mavros ros-humble-mavros-msgs
+          
+          # PX4 için gerekli diğer bağımlılıklar
+          sudo apt-get install -y ninja-build exiftool python3-pip protobuf-compiler
+          pip3 install --user -r src/PX4-Autopilot/requirements.txt
+
+          # --- ROS 2 ORTAMINI AYARLA VE DERLE ---
+          echo "Sourcing ROS 2 and building the workspace..."
+          source /opt/ros/humble/setup.bash
+          
+          # ROS 2 paketlerinin bağımlılıklarını kur
+          rosdep init || true # Zaten varsa hata vermemesi için
+          rosdep update
+          rosdep install -i --from-path src --rosdistro humble -y --skip-keys "px4"
+
+          # Projeyi derle
+          colcon build
+
+          # Derlenmiş projeyi kaynak göster
+          source install/setup.bash
+
+          # --- SİMÜLASYONU VE TESTİ ÇALIŞTIR ---
+          # Arka plan işlemlerini daha sonra temizlemek için bir kapan kur
+          trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
+
+          echo "Starting PX4 SITL simulation..."
+          # PX4 ana dizinine git ve simülasyonu başlat
+          cd src/PX4-Autopilot
+          PX4_GZ_MODEL=standard_plane make px4_sitl_default gazebo &
+          cd ../.. # Proje kök dizinine geri dön
+
+          echo "Waiting for simulation to initialize (20s)..."
+          sleep 20
+
+          echo "Starting MAVROS..."
+          ros2 launch mavros px4.launch fcu_url:="udp://:14540@localhost:14557" &
+          
+          echo "Waiting for MAVROS to connect (15s)..."
+          sleep 15
+          
+          echo "Running the main test executable..."
+          # ANA TEST KOMUTU: Bu komutun sonucu, adımın başarısını belirleyecek.
+          # Bu betiğin içeriğini sonraki adımda dolduracağız.
+          ros2 run test_package test_arming
